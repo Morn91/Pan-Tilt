@@ -112,10 +112,10 @@ void work() {
       report();
   }
   if(!start) {
-    start = millis();
     digitalWrite(13, HIGH);
     digitalWrite(FOCUS, HIGH);
-    delay(1000.0 * max(abs(endX - startX), abs(endY - startY)) / (number - 1) / MAX_SPEED);
+    delay(100);
+    start = millis();
   }
   elapsed = (millis() - start) / 1000.0;
   if(elapsed >= interval * n && n < number) {
