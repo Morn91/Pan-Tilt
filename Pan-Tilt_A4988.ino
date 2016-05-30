@@ -43,16 +43,16 @@ void tuning() {
     char val = Serial.read();
     switch(val) {
     case 'r':
-      stepperX.setSpeed(MAX_SPEED);
+      stepperX.setSpeed(MAX_SPEED/2);
       break;
     case 'l':
-      stepperX.setSpeed(-MAX_SPEED);
+      stepperX.setSpeed(-MAX_SPEED/2);
       break;
     case 'u':
-      stepperY.setSpeed(MAX_SPEED);
+      stepperY.setSpeed(MAX_SPEED/2);
       break;
     case 'd':
-      stepperY.setSpeed(-MAX_SPEED);
+      stepperY.setSpeed(-MAX_SPEED/2);
       break;
     case 's':
       stepperX.setSpeed(0);
@@ -101,6 +101,18 @@ void tuning() {
   }
 }
 
+void stop() {
+  digitalWrite(13, LOW);
+  digitalWrite(FOCUS, LOW);
+  digitalWrite(SHUTTER, LOW);
+  start = 0;
+  time = 0;
+  elapsed = 0;
+  n = 0;
+  while(Serial.available() > 0)
+    Serial.read();
+}
+
 void work() {
   if(Serial.available() > 0) {
     char val = Serial.read();
@@ -130,18 +142,6 @@ void work() {
   if(elapsed >= interval * number) {
     stop();
   }
-}
-
-void stop() {
-  digitalWrite(13, LOW);
-  digitalWrite(FOCUS, LOW);
-  digitalWrite(SHUTTER, LOW);
-  start = 0;
-  time = 0;
-  elapsed = 0;
-  n = 0;
-  while(Serial.available() > 0)
-    Serial.read();
 }
 
 void rewind() {
@@ -174,10 +174,9 @@ void report() {
   Serial.print('\t');
   Serial.print(time - elapsed, 0);
   Serial.print('\t');
-  Serial.print((endX - startX) * 360.0 / LAP, 0);
+  Serial.print((endX - startX) * 3600.0 / LAP, 0);
   Serial.print('\t');
-  Serial.print((endY - startY) * 360.0 / LAP, 0);
+  Serial.print((endY - startY) * 3600.0 / LAP, 0);
   Serial.print('\t');
   Serial.println(voltage * COEFFICIENT / i, 0);
 }
-
