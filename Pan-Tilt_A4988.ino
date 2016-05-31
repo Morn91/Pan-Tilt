@@ -19,6 +19,7 @@ float interval = 0, time = 0, elapsed = 0;
 int number = 0, n = 0;
 unsigned long start = 0;
 long startX = 0, startY = 0, endX = 0, endY = 0;
+bool smooth = false;
 
 void setup() {
   Serial.begin(9600);
@@ -43,16 +44,16 @@ void tuning() {
     char val = Serial.read();
     switch(val) {
     case 'r':
-      stepperX.setSpeed(MAX_SPEED/2);
+      stepperX.setSpeed(MAX_SPEED / 2);
       break;
     case 'l':
-      stepperX.setSpeed(-MAX_SPEED/2);
+      stepperX.setSpeed(-MAX_SPEED / 2);
       break;
     case 'u':
-      stepperY.setSpeed(MAX_SPEED/2);
+      stepperY.setSpeed(MAX_SPEED / 2);
       break;
     case 'd':
-      stepperY.setSpeed(-MAX_SPEED/2);
+      stepperY.setSpeed(-MAX_SPEED / 2);
       break;
     case 's':
       stepperX.setSpeed(0);
@@ -86,13 +87,13 @@ void tuning() {
       while(Serial.available() && i < 19)
         buffer[i++] = Serial.read();
       buffer[i++] = '\0';
-      sscanf(buffer, "%d %d", &number, &i);
+      sscanf(buffer, "%d %d %d", &number, &i, &smooth);
       interval = i / 100.0;
       startX = stepperX.currentPosition();
       startY = stepperY.currentPosition();
+      int path = max(abs(endX - startX), abs(endY - startY));
       float tmpTime = number * interval;
-      float path = max(abs(endX - startX), abs(endY - startY));
-      if(path > 0 && path / tmpTime <= MAX_SPEED) {
+      if(path / tmpTime * (smooth ? 2 : 1) <= MAX_SPEED) {
         time = tmpTime;
         work();
       }
@@ -131,8 +132,13 @@ void work() {
   }
   elapsed = (millis() - start) / 1000.0;
   if(elapsed >= interval * n && n < number) {
-    stepperX.moveTo(startX + (endX - startX) * n / (number - 1));
-    stepperY.moveTo(startY + (endY - startY) * n / (number - 1));
+    if(smooth) {
+      stepperX.moveTo(startX + (endX - startX) * (n < (number - 1) / 2.0 ? pow((n * 2.0 / (number - 1)), 2) : 2 - pow((n * 2.0 / (number - 1) - 2), 2)));
+      stepperY.moveTo(startY + (endY - startY) * (n < (number - 1) / 2.0 ? pow((n * 2.0 / (number - 1)), 2) : 2 - pow((n * 2.0 / (number - 1) - 2), 2)));
+    } else {
+      stepperX.moveTo(startX + (endX - startX) * n / (float)(number - 1));
+      stepperY.moveTo(startY + (endY - startY) * n / (float)(number - 1));
+	}
     rewind();
     digitalWrite(SHUTTER, HIGH);
     delay(100);
@@ -169,6 +175,8 @@ void report() {
   Serial.print(number);
   Serial.print('\t');
   Serial.print(interval * 100, 0);
+  Serial.print('\t');
+  Serial.print(number);
   Serial.print('\t');
   Serial.print(time, 0);
   Serial.print('\t');
