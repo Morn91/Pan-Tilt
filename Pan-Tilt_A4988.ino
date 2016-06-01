@@ -8,26 +8,27 @@
 #define DIRY 5
 #define FOCUS 6
 #define SHUTTER 7
-#define MAX_SPEED 1536
 #define LAP 15360
-#define COEFFICIENT 0.9666
+#define MAX_SPEED 1536
+#define DELAY 100
+#define VOLTAGE_K 0.9666
 
 AccelStepper stepperX(AccelStepper::DRIVER, STEPX, DIRX);
 AccelStepper stepperY(AccelStepper::DRIVER, STEPY, DIRY);
 
-float interval = 0, time = 0, elapsed = 0;
-int number = 0, n = 0;
+float k = 0, elapsed = 0, maxSpeed = MAX_SPEED * 1.01;
+int number = 0, interval = 0, n = 0, holdup = 0;
 unsigned long start = 0;
 long startX = 0, startY = 0, endX = 0, endY = 0;
-bool smooth = false;
+bool smooth = 0;
 
 void setup() {
   Serial.begin(9600);
   pinMode(13, OUTPUT);
   pinMode(FOCUS, OUTPUT);
   pinMode(SHUTTER, OUTPUT);
-  stepperX.setMaxSpeed(MAX_SPEED);
-  stepperY.setMaxSpeed(MAX_SPEED);
+  stepperX.setMaxSpeed(maxSpeed);
+  stepperY.setMaxSpeed(maxSpeed);
 }
 
 void loop() {
@@ -44,16 +45,16 @@ void tuning() {
     char val = Serial.read();
     switch(val) {
     case 'r':
-      stepperX.setSpeed(MAX_SPEED / 2);
+      stepperX.setSpeed(maxSpeed / 2);
       break;
     case 'l':
-      stepperX.setSpeed(-MAX_SPEED / 2);
+      stepperX.setSpeed(-maxSpeed / 2);
       break;
     case 'u':
-      stepperY.setSpeed(MAX_SPEED / 2);
+      stepperY.setSpeed(maxSpeed / 2);
       break;
     case 'd':
-      stepperY.setSpeed(-MAX_SPEED / 2);
+      stepperY.setSpeed(-maxSpeed / 2);
       break;
     case 's':
       stepperX.setSpeed(0);
@@ -81,22 +82,19 @@ void tuning() {
       report();
       break;
     case '+':
-      delay(100);
-      char buffer[20];
+      delay(DELAY);
+      char buffer[50];
       int i = 0;
       while(Serial.available() && i < 19)
         buffer[i++] = Serial.read();
       buffer[i++] = '\0';
-      sscanf(buffer, "%d %d %d", &number, &i, &smooth);
-      interval = i / 100.0;
+      sscanf(buffer, "%d %d %d", &number, &interval, &smooth);
       startX = stepperX.currentPosition();
       startY = stepperY.currentPosition();
-      int path = max(abs(endX - startX), abs(endY - startY));
-      float tmpTime = number * interval;
-      if(path / tmpTime * (smooth ? 2 : 1) <= MAX_SPEED) {
-        time = tmpTime;
+      long path = max(abs(endX - startX), abs(endY - startY));
+      holdup = 1000.0 * (smooth ? 2 : 1) * path / MAX_SPEED / (number - 1);
+      if(interval >= holdup + DELAY)
         work();
-      }
       break;
     }
   }
@@ -107,7 +105,6 @@ void stop() {
   digitalWrite(FOCUS, LOW);
   digitalWrite(SHUTTER, LOW);
   start = 0;
-  time = 0;
   elapsed = 0;
   n = 0;
   while(Serial.available() > 0)
@@ -127,64 +124,65 @@ void work() {
   if(!start) {
     digitalWrite(13, HIGH);
     digitalWrite(FOCUS, HIGH);
-    delay(100);
+    delay(DELAY);
     start = millis();
   }
   elapsed = (millis() - start) / 1000.0;
-  if(elapsed >= interval * n && n < number) {
-    if(smooth) {
-      stepperX.moveTo(startX + (endX - startX) * (n < (number - 1) / 2.0 ? pow((n * 2.0 / (number - 1)), 2) : 2 - pow((n * 2.0 / (number - 1) - 2), 2)));
-      stepperY.moveTo(startY + (endY - startY) * (n < (number - 1) / 2.0 ? pow((n * 2.0 / (number - 1)), 2) : 2 - pow((n * 2.0 / (number - 1) - 2), 2)));
-    } else {
-      stepperX.moveTo(startX + (endX - startX) * n / (float)(number - 1));
-      stepperY.moveTo(startY + (endY - startY) * n / (float)(number - 1));
-	}
-    rewind();
+  if(elapsed >= n / 1000.0 * interval) {
+    if(smooth)
+      k = n < (number - 1) / 2.0 ? pow((n * 2.0 / (number - 1)), 2) / 2 : 1 - pow((n * 2.0 / (number - 1) - 2), 2) / 2;
+    else
+      k = n / (float)(number - 1);
+    stepperX.moveTo(startX + (endX - startX) * k);
+    stepperY.moveTo(startY + (endY - startY) * k);
+    if(n)
+      rewind();
     digitalWrite(SHUTTER, HIGH);
-    delay(100);
+    delay(DELAY);
     digitalWrite(SHUTTER, LOW);
     n++;
   }
-  if(elapsed >= interval * number) {
+  if(n >= number) {
     stop();
   }
 }
 
 void rewind() {
+  unsigned long rewindStart = millis();
   float pathX = abs(stepperX.distanceToGo());
   float pathY = abs(stepperY.distanceToGo());
-  float tmpTime = max(pathX, pathY) / MAX_SPEED;
+  float tmpTime = max(pathX, pathY) / maxSpeed;
   stepperX.setSpeed(pathX / tmpTime);
   stepperY.setSpeed(pathY / tmpTime);
-  while(true) {
+  while(stepperX.distanceToGo() != 0 || stepperY.distanceToGo() != 0) {
     stepperX.runSpeedToPosition();
     stepperY.runSpeedToPosition();
-    if(stepperX.distanceToGo() == 0 && stepperY.distanceToGo() == 0)
-      break;
   }
   stepperX.setSpeed(0);
   stepperY.setSpeed(0);
+  while(millis() < rewindStart + holdup - 10);
 }
 
 void report() {
   int i, voltage = 0;
+  float time = number / 1000.0 * interval;
   for(i = 0; i < 20; i++) {
     voltage += analogRead(BATTERY);
     delay(5);
   }
   Serial.print(number);
   Serial.print('\t');
-  Serial.print(interval * 100, 0);
+  Serial.print(interval);
   Serial.print('\t');
-  Serial.print(number);
+  Serial.print(smooth);
   Serial.print('\t');
-  Serial.print(time, 0);
+  Serial.print(elapsed ? time : 0, 0);
   Serial.print('\t');
-  Serial.print(time - elapsed, 0);
+  Serial.print(elapsed ? time - elapsed : 0, 0);
   Serial.print('\t');
   Serial.print((endX - startX) * 3600.0 / LAP, 0);
   Serial.print('\t');
   Serial.print((endY - startY) * 3600.0 / LAP, 0);
   Serial.print('\t');
-  Serial.println(voltage * COEFFICIENT / i, 0);
+  Serial.println(voltage * VOLTAGE_K / i, 0);
 }
