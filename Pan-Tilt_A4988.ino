@@ -16,7 +16,7 @@
 AccelStepper stepperX(AccelStepper::DRIVER, STEPX, DIRX);
 AccelStepper stepperY(AccelStepper::DRIVER, STEPY, DIRY);
 
-float k = 0, elapsed = 0, maxSpeed = MAX_SPEED * 1.01;
+float k = 0, time = 0, elapsed = 0, maxSpeed = MAX_SPEED * 1.01;
 int number = 0, interval = 0, n = 0, holdup = 0;
 unsigned long start = 0;
 long startX = 0, startY = 0, endX = 0, endY = 0;
@@ -93,8 +93,10 @@ void tuning() {
       startY = stepperY.currentPosition();
       long path = max(abs(endX - startX), abs(endY - startY));
       holdup = 1000.0 * (smooth ? 2 : 1) * path / MAX_SPEED / (number - 1);
-      if(interval >= holdup + DELAY)
+      if(interval >= holdup + DELAY) {
+        time = number / 1000.0 * interval;
         work();
+      }
       break;
     }
   }
@@ -105,6 +107,7 @@ void stop() {
   digitalWrite(FOCUS, LOW);
   digitalWrite(SHUTTER, LOW);
   start = 0;
+  time = 0;
   elapsed = 0;
   n = 0;
   while(Serial.available() > 0)
@@ -142,7 +145,7 @@ void work() {
     digitalWrite(SHUTTER, LOW);
     n++;
   }
-  if(n >= number) {
+  if(elapsed >= time) {
     stop();
   }
 }
@@ -165,7 +168,6 @@ void rewind() {
 
 void report() {
   int i, voltage = 0;
-  float time = number / 1000.0 * interval;
   for(i = 0; i < 20; i++) {
     voltage += analogRead(BATTERY);
     delay(5);
@@ -176,9 +178,9 @@ void report() {
   Serial.print('\t');
   Serial.print(smooth);
   Serial.print('\t');
-  Serial.print(elapsed ? time : 0, 0);
+  Serial.print(time, 0);
   Serial.print('\t');
-  Serial.print(elapsed ? time - elapsed : 0, 0);
+  Serial.print(time - elapsed, 0);
   Serial.print('\t');
   Serial.print((endX - startX) * 3600.0 / LAP, 0);
   Serial.print('\t');
