@@ -16,9 +16,9 @@
 AccelStepper stepperX(AccelStepper::DRIVER, STEPX, DIRX);
 AccelStepper stepperY(AccelStepper::DRIVER, STEPY, DIRY);
 
-float k = 0, time = 0, elapsed = 0, maxSpeed = MAX_SPEED * 1.01;
+float k = 0, maxSpeed = MAX_SPEED * 1.01;
 int number = 0, interval = 0, n = 0, holdup = 0;
-unsigned long start = 0;
+unsigned long start = 0, time = 0, elapsed = 0;
 long startX = 0, startY = 0, endX = 0, endY = 0;
 bool smooth = 0;
 
@@ -83,9 +83,9 @@ void tuning() {
       break;
     case '+':
       delay(DELAY);
-      char buffer[50];
-      int i = 0;
-      while(Serial.available() && i < 19)
+      int i = 0, size = 50;
+      char buffer[size];
+      while(Serial.available() && i < size - 1)
         buffer[i++] = Serial.read();
       buffer[i++] = '\0';
       sscanf(buffer, "%d %d %d", &number, &interval, &smooth);
@@ -94,7 +94,7 @@ void tuning() {
       long path = max(abs(endX - startX), abs(endY - startY));
       holdup = 1000.0 * (smooth ? 2 : 1) * path / MAX_SPEED / (number - 1);
       if(interval >= holdup + DELAY) {
-        time = number / 1000.0 * interval;
+        time = (unsigned long)number * interval;
         work();
       }
       break;
@@ -130,8 +130,8 @@ void work() {
     delay(DELAY);
     start = millis();
   }
-  elapsed = (millis() - start) / 1000.0;
-  if(elapsed >= n / 1000.0 * interval) {
+  elapsed = millis() - start;
+  if(elapsed + holdup >= (unsigned long)n * interval) {
     if(smooth)
       k = n < (number - 1) / 2.0 ? pow((n * 2.0 / (number - 1)), 2) / 2 : 1 - pow((n * 2.0 / (number - 1) - 2), 2) / 2;
     else
@@ -145,9 +145,8 @@ void work() {
     digitalWrite(SHUTTER, LOW);
     n++;
   }
-  if(elapsed >= time) {
+  if(n >= number || elapsed >= time)
     stop();
-  }
 }
 
 void rewind() {
@@ -163,7 +162,7 @@ void rewind() {
   }
   stepperX.setSpeed(0);
   stepperY.setSpeed(0);
-  while(millis() < rewindStart + holdup - 10);
+  while(millis() < rewindStart + holdup - 1);
 }
 
 void report() {
@@ -178,9 +177,9 @@ void report() {
   Serial.print('\t');
   Serial.print(smooth);
   Serial.print('\t');
-  Serial.print(time, 0);
+  Serial.print(time / 1000.0, 0);
   Serial.print('\t');
-  Serial.print(time - elapsed, 0);
+  Serial.print((time - elapsed) / 1000.0, 0);
   Serial.print('\t');
   Serial.print((endX - startX) * 3600.0 / LAP, 0);
   Serial.print('\t');
