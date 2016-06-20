@@ -17,7 +17,7 @@ AccelStepper stepperX(AccelStepper::DRIVER, STEPX, DIRX);
 AccelStepper stepperY(AccelStepper::DRIVER, STEPY, DIRY);
 
 float k = 0, maxSpeed = MAX_SPEED * 1.01;
-int number = 0, interval = 0, n = 0, holdup = 0;
+int number = 0, period = 0, n = 0, holdup = 0;
 unsigned long start = 0, time = 0, elapsed = 0;
 long startX = 0, startY = 0, endX = 0, endY = 0;
 bool smooth = 0;
@@ -88,13 +88,13 @@ void tuning() {
       while(Serial.available() && i < size - 1)
         buffer[i++] = Serial.read();
       buffer[i++] = '\0';
-      sscanf(buffer, "%d %d %d", &number, &interval, &smooth);
+      sscanf(buffer, "%d %d %d", &number, &period, &smooth);
       startX = stepperX.currentPosition();
       startY = stepperY.currentPosition();
       long path = max(abs(endX - startX), abs(endY - startY));
       holdup = 1000.0 * (smooth ? 2 : 1) * path / MAX_SPEED / (number - 1);
-      if(interval >= holdup + DELAY) {
-        time = (unsigned long)number * interval;
+      if(period >= holdup + DELAY) {
+        time = (unsigned long)number * period;
         work();
       }
       break;
@@ -131,7 +131,7 @@ void work() {
     start = millis();
   }
   elapsed = millis() - start;
-  if(elapsed + holdup >= (unsigned long)n * interval) {
+  if(elapsed + holdup >= (unsigned long)n * period) {
     if(smooth)
       k = n < (number - 1) / 2.0 ? pow((n * 2.0 / (number - 1)), 2) / 2 : 1 - pow((n * 2.0 / (number - 1) - 2), 2) / 2;
     else
@@ -173,9 +173,11 @@ void report() {
   }
   Serial.print(number);
   Serial.print('\t');
-  Serial.print(interval);
+  Serial.print(period);
   Serial.print('\t');
   Serial.print(smooth);
+  Serial.print('\t');
+  Serial.print(n);
   Serial.print('\t');
   Serial.print(time / 1000.0, 0);
   Serial.print('\t');
