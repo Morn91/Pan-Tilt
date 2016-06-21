@@ -17,8 +17,8 @@ AccelStepper stepperX(AccelStepper::DRIVER, STEPX, DIRX);
 AccelStepper stepperY(AccelStepper::DRIVER, STEPY, DIRY);
 
 float k = 0, maxSpeed = MAX_SPEED * 1.01;
-int number = 0, period = 0, n = 0, holdup = 0;
-unsigned long start = 0, time = 0, elapsed = 0;
+unsigned int number = 0, n = 0, holdup = 0;
+unsigned long period = 0, start = 0, time = 0, elapsed = 0;
 long startX = 0, startY = 0, endX = 0, endY = 0;
 bool smooth = 0;
 
@@ -92,7 +92,7 @@ void tuning() {
       startX = stepperX.currentPosition();
       startY = stepperY.currentPosition();
       long path = max(abs(endX - startX), abs(endY - startY));
-      holdup = 1000.0 * (smooth ? 2 : 1) * path / MAX_SPEED / (number - 1);
+      holdup = ceil(1000.0 * (smooth ? 2 : 1) * path / MAX_SPEED / (number - 1));
       if(period >= holdup + DELAY) {
         time = (unsigned long)number * period;
         work();
@@ -138,12 +138,11 @@ void work() {
       k = n / (float)(number - 1);
     stepperX.moveTo(startX + (endX - startX) * k);
     stepperY.moveTo(startY + (endY - startY) * k);
-    if(n)
+    if(n++)
       rewind();
     digitalWrite(SHUTTER, HIGH);
     delay(DELAY);
     digitalWrite(SHUTTER, LOW);
-    n++;
   }
   if(n >= number || elapsed >= time)
     stop();
