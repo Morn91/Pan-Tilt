@@ -20,7 +20,7 @@ float k = 0, maxSpeed = MAX_SPEED * 1.01;
 unsigned int number = 0, n = 0, holdup = 0;
 unsigned long period = 0, start = 0, time = 0, elapsed = 0;
 long startX = 0, startY = 0, endX = 0, endY = 0;
-bool smooth = 0;
+bool smooth = 0, pause = 0;
 
 void setup() {
   Serial.begin(9600);
@@ -88,12 +88,12 @@ void tuning() {
       while(Serial.available() && i < size - 1)
         buffer[i++] = Serial.read();
       buffer[i++] = '\0';
-      sscanf(buffer, "%d %d %d", &number, &period, &smooth);
+      sscanf(buffer, "%d %d %d %d", &number, &period, &smooth, &pause);
       startX = stepperX.currentPosition();
       startY = stepperY.currentPosition();
       long path = max(abs(endX - startX), abs(endY - startY));
       holdup = ceil(1000.0 * (smooth ? 2 : 1) * path / MAX_SPEED / (number - 1));
-      if(period >= holdup + DELAY) {
+      if(period >= holdup + DELAY * (pause ? 2 : 1)) {
         time = (unsigned long)number * period;
         work();
       }
@@ -126,8 +126,10 @@ void work() {
   }
   if(!start) {
     digitalWrite(13, HIGH);
-    digitalWrite(FOCUS, HIGH);
-    delay(DELAY);
+    if(!pause) {
+      digitalWrite(FOCUS, HIGH);
+      delay(DELAY);
+    }
     start = millis();
   }
   elapsed = millis() - start;
@@ -140,9 +142,15 @@ void work() {
     stepperY.moveTo(startY + (endY - startY) * k);
     if(n++)
       rewind();
+    if(pause) {
+      digitalWrite(FOCUS, HIGH);
+      delay(DELAY);
+    }
     digitalWrite(SHUTTER, HIGH);
     delay(DELAY);
     digitalWrite(SHUTTER, LOW);
+    if(pause)
+      digitalWrite(FOCUS, LOW);
   }
   if(n >= number || elapsed >= time)
     stop();
@@ -175,6 +183,8 @@ void report() {
   Serial.print(period);
   Serial.print('\t');
   Serial.print(smooth);
+  Serial.print('\t');
+  Serial.print(pause);
   Serial.print('\t');
   Serial.print(n);
   Serial.print('\t');
